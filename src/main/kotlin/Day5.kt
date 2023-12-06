@@ -1,20 +1,23 @@
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
 
 fun LongRange.length() = this.last - this.first
 
-infix fun LongRange.intersect(other: LongRange): LongRange {
-    if (first <= other.last && other.first <= last)
-        return maxOf(first, other.first).rangeTo(minOf(last, other.last))
-    return LongRange(0, 0)
-}
-
+// https://stackoverflow.com/questions/36035074/how-can-i-find-an-overlap-between-two-given-ranges
 infix fun LongRange.overlap(other: LongRange): LongRange {
-    
+    val newFirst = max(first, other.first)
+    val newLast = min(last, other.last)
+    return if (newFirst <= newLast) {
+        LongRange(newFirst, newLast)
+    } else {
+        LongRange(0, -1)
+    }
 }
 
 fun main() {
-    var almanac = File("inputs/day5.1.in").readLines()
-    var prevs = almanac[0].split(": ", " ").drop(1).map { it.toLong() }.chunked(2)
+    var almanac = File("inputs/day5.example.in").readLines()
+    var prevs = almanac[0].split(": ", " ").asSequence().drop(1).map { it.toLong() }.chunked(2)
         .map { LongRange(it[0], it[0] + it[1]) }.toMutableList()
     var nexts = ArrayList<LongRange>()
 
@@ -30,16 +33,17 @@ fun main() {
                 LongRange(almanacMap[0], almanacMap[0] + almanacMap[2] - 1)
         }
 
-        while (prevs.zip(map.keys).any { !it.first.intersect(it.second).isEmpty() }) {
-            prevs.zip(map.keys).forEach {
-                val prev = it.first
-                val src = it.second
+        while (prevs.zip(map.keys).any { !it.first.overlap(it.second).isEmpty() }) {
+            for (pair in prevs.zip(map.keys)) {
+                val prev = pair.first
+                val src = pair.second
                 val dst = map[src]!!
-                val intersection = prev.intersect(src)
-                if (!intersection.isEmpty()) {
-                    nexts.add(LongRange(dst.first + prev.first - src.first, dst.last + prev.last - src.last))
-//                  nexts.add(dst.first + prev - src.first)
-                    prevs.remove(it.first)
+                val overlap = prev.overlap(src)
+                if (!overlap.isEmpty()) {
+                    nexts.add(LongRange(overlap.first - src.first + dst.first, overlap.last - src.last + dst.last))
+                    // TODO: add back residual ranges to prevs
+
+                    prevs.remove(pair.first)
                 }
             }
         }
