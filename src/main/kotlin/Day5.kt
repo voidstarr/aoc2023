@@ -1,8 +1,9 @@
 import java.io.File
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.math.max
 import kotlin.math.min
-
-fun LongRange.length() = this.last - this.first
 
 // https://stackoverflow.com/questions/36035074/how-can-i-find-an-overlap-between-two-given-ranges
 infix fun LongRange.overlap(other: LongRange): LongRange {
@@ -15,11 +16,15 @@ infix fun LongRange.overlap(other: LongRange): LongRange {
     }
 }
 
+fun <T, U> Collection<T>.cartesianProduct(c2: Collection<U>): List<Pair<T, U>> {
+    return flatMap { lhsElem -> c2.map { rhsElem -> lhsElem to rhsElem } }
+}
+
 fun main() {
     var almanac = File("inputs/day5.example.in").readLines()
     var prevs = almanac[0].split(": ", " ").asSequence().drop(1).map { it.toLong() }.chunked(2)
-        .map { LongRange(it[0], it[0] + it[1]) }.toMutableList()
-    var nexts = ArrayList<LongRange>()
+        .map { LongRange(it[0], it[0] + it[1]) }.toMutableSet()
+    var nexts = mutableSetOf<LongRange>()
 
     almanac = almanac.drop(3)
 
@@ -33,30 +38,58 @@ fun main() {
                 LongRange(almanacMap[0], almanacMap[0] + almanacMap[2] - 1)
         }
 
-        while (prevs.zip(map.keys).any { !it.first.overlap(it.second).isEmpty() }) {
-            for (pair in prevs.zip(map.keys)) {
-                val prev = pair.first
-                val src = pair.second
-                val dst = map[src]!!
+        var overhangs = mutableSetOf<LongRange>()
+        while (prevs.isNotEmpty()) {
+            val prev = prevs.first()
+            println("prevs: $prevs srcs: ${map.keys} overhangs: $overhangs")
+            var isOverlap = false
+            for (src in map.keys) {
                 val overlap = prev.overlap(src)
-                if (!overlap.isEmpty()) {
-                    nexts.add(LongRange(overlap.first - src.first + dst.first, overlap.last - src.last + dst.last))
-                    // TODO: add back residual ranges to prevs
+                isOverlap = !overlap.isEmpty()
+                if (isOverlap) {
+                    prevs.remove(prev)
 
-                    prevs.remove(pair.first)
+                    val dst = map[src]!!
+                    val overlapDst =
+                        LongRange(overlap.first - src.first + dst.first, overlap.last - src.last + dst.last)
+                    nexts.add(overlapDst)
+
+                    println("src: $src, dst: $dst")
+                    println("overlap: $overlap between $prev and $dst")
+
+                    val leftOverhangStart = min(prev.first, src.first)
+                    if (leftOverhangStart < overlap.first) {
+                        val overhang = LongRange(leftOverhangStart, overlap.first - 1)
+                        overhangs.add(overhang)
+                        println("left overhang: $overhang")
+                    }
+
+                    val rightOverhangEnd = max(prev.last, src.last)
+                    if (rightOverhangEnd > overlap.last) {
+                        val overhang = LongRange(overlap.last + 1, rightOverhangEnd)
+                        overhangs.add(overhang)
+                        println("left overhang: $overhang")
+                    }
                 }
             }
+            if (!isOverlap) {
+                overhangs.add(prev)
+                prevs.remove(prev)
+            }
+            overhangs = overhangs.filter { !it.isEmpty() }.toMutableSet()
+            if (prevs.size == 0) prevs.addAll(overhangs)
+            println("$prevs ${map.keys}")
         }
 
-        nexts.addAll(prevs)
+        nexts.addAll(overhangs)
 
         prevs = nexts
-        nexts = ArrayList()
+        nexts = mutableSetOf()
 
         almanac = almanac.drop(lastLine + 2)
         lastLine = if (almanac.indexOf("") > 0) almanac.indexOf("") else almanac.size
     }
-    println(prevs)
+    println(prevs.map { it.first }.min())
 }
 
 fun partone() {
