@@ -1,5 +1,4 @@
 import java.io.File
-import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.math.max
@@ -16,80 +15,78 @@ infix fun LongRange.overlap(other: LongRange): LongRange {
     }
 }
 
-fun <T, U> Collection<T>.cartesianProduct(c2: Collection<U>): List<Pair<T, U>> {
-    return flatMap { lhsElem -> c2.map { rhsElem -> lhsElem to rhsElem } }
+// I cheated: https://gist.github.com/HexTree/d1a3a36cf794d5cee1d325a63ff26a98
+fun mapRanges(inputs: MutableSet<LongRange>, map: HashMap<LongRange, LongRange>): MutableSet<LongRange> {
+    val results = mutableSetOf<LongRange>()
+    for (input in inputs) {
+        var overlaps = mutableSetOf<LongRange>()
+        for (src in map.keys) {
+            val overlap = input.overlap(src)
+            if (!overlap.isEmpty()) {
+                val dst = map[src]!!
+                results.add(LongRange(overlap.first - src.first + dst.first, overlap.last - src.last + dst.last))
+                overlaps.add(overlap)
+            }
+        }
+        if (overlaps.isEmpty()) {
+            results.add(input)
+            continue
+        }
+
+        val sorted = overlaps.toSortedSet(compareBy(LongRange::first, LongRange::last))
+        overlaps = sorted
+
+        if (overlaps.first().first > input.first) {
+            results.add(LongRange(input.first, overlaps.first().first - 1))
+        }
+
+        if (overlaps.last().last < input.last) {
+            results.add(LongRange(overlaps.last().last + 1, input.last))
+        }
+
+        for (pair in overlaps.chunked(2)) {
+            if (pair.size < 2 || pair[1].first <= pair[0].last + 1)
+                continue
+            results.add(LongRange(pair[1].first + 1, pair[0].last - 1))
+        }
+
+
+    }
+    return results
 }
 
 fun main() {
-    var almanac = File("inputs/day5.example.in").readLines()
-    var prevs = almanac[0].split(": ", " ").asSequence().drop(1).map { it.toLong() }.chunked(2)
+    var almanac = File("inputs/day5.1.in").readLines()
+    // parse seeds
+    val prevs = almanac[0].split(": ", " ").asSequence().drop(1).map { it.toLong() }.chunked(2)
         .map { LongRange(it[0], it[0] + it[1]) }.toMutableSet()
     var nexts = mutableSetOf<LongRange>()
-
     almanac = almanac.drop(3)
 
+    // parse maps
+    val maps = mutableListOf<HashMap<LongRange, LongRange>>()
     var lastLine = almanac.indexOf("")
     while (almanac.isNotEmpty()) {
         val map = HashMap<LongRange, LongRange>()
-
         for (line in almanac.subList(0, lastLine)) {
             val almanacMap = line.split(' ').map { it.toLong() }
             map[LongRange(almanacMap[1], almanacMap[1] + almanacMap[2] - 1)] =
                 LongRange(almanacMap[0], almanacMap[0] + almanacMap[2] - 1)
         }
 
-        var overhangs = mutableSetOf<LongRange>()
-        while (prevs.isNotEmpty()) {
-            val prev = prevs.first()
-            println("prevs: $prevs srcs: ${map.keys} overhangs: $overhangs")
-            var isOverlap = false
-            for (src in map.keys) {
-                val overlap = prev.overlap(src)
-                isOverlap = !overlap.isEmpty()
-                if (isOverlap) {
-                    prevs.remove(prev)
-
-                    val dst = map[src]!!
-                    val overlapDst =
-                        LongRange(overlap.first - src.first + dst.first, overlap.last - src.last + dst.last)
-                    nexts.add(overlapDst)
-
-                    println("src: $src, dst: $dst")
-                    println("overlap: $overlap between $prev and $dst")
-
-                    val leftOverhangStart = min(prev.first, src.first)
-                    if (leftOverhangStart < overlap.first) {
-                        val overhang = LongRange(leftOverhangStart, overlap.first - 1)
-                        overhangs.add(overhang)
-                        println("left overhang: $overhang")
-                    }
-
-                    val rightOverhangEnd = max(prev.last, src.last)
-                    if (rightOverhangEnd > overlap.last) {
-                        val overhang = LongRange(overlap.last + 1, rightOverhangEnd)
-                        overhangs.add(overhang)
-                        println("left overhang: $overhang")
-                    }
-                }
-            }
-            if (!isOverlap) {
-                overhangs.add(prev)
-                prevs.remove(prev)
-            }
-            overhangs = overhangs.filter { !it.isEmpty() }.toMutableSet()
-            if (prevs.size == 0) prevs.addAll(overhangs)
-            println("$prevs ${map.keys}")
-        }
-
-        nexts.addAll(overhangs)
-
-        prevs = nexts
-        nexts = mutableSetOf()
+        maps.add(map)
 
         almanac = almanac.drop(lastLine + 2)
         lastLine = if (almanac.indexOf("") > 0) almanac.indexOf("") else almanac.size
     }
-    println(prevs.map { it.first }.min())
+
+    // do the thing
+    var results = prevs
+    for (map in maps) {
+        results = mapRanges(results, map)
+    }
+
+    println(results.map { it.first }.min())
 }
 
 fun partone() {
